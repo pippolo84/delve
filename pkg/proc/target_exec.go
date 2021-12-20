@@ -218,6 +218,11 @@ func (dbp *Target) Continue() error {
 			if curbp.Breakpoint.WatchType != 0 {
 				dbp.StopReason = StopWatchpoint
 			}
+			if curbp.IsHitCondNoMoreSatisfiable() {
+				if err := dbp.ClearBreakpoint(curbp.Addr); err != nil {
+					return err
+				}
+			}
 			return conditionErrors(threads)
 		default:
 			// not a manual stop, not on runtime.Breakpoint, not on a breakpoint, just repeat

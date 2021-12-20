@@ -413,6 +413,28 @@ func (bp *Breakpoint) IsUser() bool {
 	return false
 }
 
+// IsHitCondNoMoreSatisfiable returns true if the breakpoint has a hit
+// condition that is no more satisfiable.
+// The hit condition is considered no more satisfiable if it can no longer be
+// hit again, for example with {Op: "==", Val: 1} and TotalHitCount == 1
+func (bp *Breakpoint) IsHitCondNoMoreSatisfiable() bool {
+	breaklet := bp.UserBreaklet()
+	if breaklet == nil || breaklet.HitCond == nil {
+		return false
+	}
+	switch breaklet.HitCond.Op {
+	case token.EQL, token.LEQ:
+		if int(breaklet.TotalHitCount) == breaklet.HitCond.Val {
+			return true
+		}
+	case token.LSS:
+		if int(breaklet.TotalHitCount) == breaklet.HitCond.Val-1 {
+			return true
+		}
+	}
+	return false
+}
+
 // UserBreaklet returns the user breaklet for this breakpoint, or nil if
 // none exist.
 func (bp *Breakpoint) UserBreaklet() *Breaklet {
