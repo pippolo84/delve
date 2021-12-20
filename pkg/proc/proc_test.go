@@ -1738,6 +1738,108 @@ func TestHitCondBreakpointEQ(t *testing.T) {
 			t.Fatalf("Stoppend on wrong hitcount %d\n", i)
 		}
 
+		if countBreakpoints(p) != 0 {
+			t.Fatalf(
+				"Hit condition {Op:%q, Val:%d} is no more satisfiable but breakpoint was not removed",
+				bp.UserBreaklet().HitCond.Op,
+				bp.UserBreaklet().HitCond.Val,
+			)
+		}
+
+		err := p.Continue()
+		if _, exited := err.(proc.ErrProcessExited); !exited {
+			t.Fatalf("Unexpected error on Continue(): %v", err)
+		}
+	})
+}
+
+func TestHitCondBreakpointLSS(t *testing.T) {
+	withTestProcess("break", t, func(p *proc.Target, fixture protest.Fixture) {
+		bp := setFileBreakpoint(p, t, fixture.Source, 7)
+		bp.UserBreaklet().HitCond = &struct {
+			Op  token.Token
+			Val int
+		}{token.LSS, 3}
+
+		assertNoError(p.Continue(), t, "Continue()")
+		ivar := evalVariable(p, t, "i")
+
+		i, _ := constant.Int64Val(ivar.Value)
+		if i != 1 {
+			t.Fatalf("Stopped on wrong hitcount %d\n", i)
+		}
+
+		if countBreakpoints(p) != 1 {
+			t.Fatalf(
+				"Hit condition {Op:%q, Val:%d} is still satisfiable but breakpoint was removed",
+				bp.UserBreaklet().HitCond.Op,
+				bp.UserBreaklet().HitCond.Val,
+			)
+		}
+
+		assertNoError(p.Continue(), t, "Continue()")
+		ivar = evalVariable(p, t, "i")
+
+		i, _ = constant.Int64Val(ivar.Value)
+		if i != 2 {
+			t.Fatalf("Stopped on wrong hitcount %d\n", i)
+		}
+
+		if countBreakpoints(p) != 0 {
+			t.Fatalf(
+				"Hit condition {Op:%q, Val:%d} is no more satisfiable but breakpoint was not removed",
+				bp.UserBreaklet().HitCond.Op,
+				bp.UserBreaklet().HitCond.Val,
+			)
+		}
+
+		err := p.Continue()
+		if _, exited := err.(proc.ErrProcessExited); !exited {
+			t.Fatalf("Unexpected error on Continue(): %v", err)
+		}
+	})
+}
+
+func TestHitCondBreakpointLEQ(t *testing.T) {
+	withTestProcess("break", t, func(p *proc.Target, fixture protest.Fixture) {
+		bp := setFileBreakpoint(p, t, fixture.Source, 7)
+		bp.UserBreaklet().HitCond = &struct {
+			Op  token.Token
+			Val int
+		}{token.LEQ, 2}
+
+		assertNoError(p.Continue(), t, "Continue()")
+		ivar := evalVariable(p, t, "i")
+
+		i, _ := constant.Int64Val(ivar.Value)
+		if i != 1 {
+			t.Fatalf("Stopped on wrong hitcount %d\n", i)
+		}
+
+		if countBreakpoints(p) != 1 {
+			t.Fatalf(
+				"Hit condition {Op:%q, Val:%d} is still satisfiable but breakpoint was removed",
+				bp.UserBreaklet().HitCond.Op,
+				bp.UserBreaklet().HitCond.Val,
+			)
+		}
+
+		assertNoError(p.Continue(), t, "Continue()")
+		ivar = evalVariable(p, t, "i")
+
+		i, _ = constant.Int64Val(ivar.Value)
+		if i != 2 {
+			t.Fatalf("Stopped on wrong hitcount %d\n", i)
+		}
+
+		if countBreakpoints(p) != 0 {
+			t.Fatalf(
+				"Hit condition {Op:%q, Val:%d} is no more satisfiable but breakpoint was not removed",
+				bp.UserBreaklet().HitCond.Op,
+				bp.UserBreaklet().HitCond.Val,
+			)
+		}
+
 		err := p.Continue()
 		if _, exited := err.(proc.ErrProcessExited); !exited {
 			t.Fatalf("Unexpected error on Continue(): %v", err)
