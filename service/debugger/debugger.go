@@ -770,14 +770,11 @@ func (d *Debugger) CreateEBPFTracepoint(fnName string) error {
 	return d.target.SetEBPFTracepoint(fnName)
 }
 
-// AmendBreakpoint will update the breakpoint with the matching ID.
+// amendBreakpoint will update the breakpoint with the matching ID.
 // It also enables or disables the breakpoint.
-func (d *Debugger) AmendBreakpoint(amend *api.Breakpoint) error {
-	d.targetMutex.Lock()
-	defer d.targetMutex.Unlock()
-
+// We can consume this function to avoid locking a goroutine.
+func (d *Debugger) amendBreakpoint(amend *api.Breakpoint) error {
 	originals := d.findBreakpoint(amend.ID)
-
 	if len(originals) > 0 && originals[0].WatchExpr != "" && amend.Disabled {
 		return errors.New("can not disable watchpoints")
 	}
@@ -786,12 +783,24 @@ func (d *Debugger) AmendBreakpoint(amend *api.Breakpoint) error {
 	if originals == nil && !disabled {
 		return fmt.Errorf("no breakpoint with ID %d", amend.ID)
 	}
+
 	if !amend.Disabled && disabled { // enable the breakpoint
 		bp, err := d.target.SetBreakpointWithID(amend.ID, amend.Addr)
 		if err != nil {
 			return err
 		}
 		copyBreakpointInfo(bp, amend)
+		if breaklet := bp.UserBreaklet(); breaklet != nil {
+			breaklet.TotalHitCount = amend.TotalHitCount
+			breaklet.HitCount = map[int]uint64{}
+			for idx := range amend.HitCount {
+				i, err := strconv.Atoi(idx)
+				if err != nil {
+					return fmt.Errorf("can't convert goroutine ID: %w", err)
+				}
+				breaklet.HitCount[i] = amend.HitCount[idx]
+			}
+		}
 		delete(d.disabledBreakpoints, amend.ID)
 	}
 	if amend.Disabled && !disabled { // disable the breakpoint
@@ -807,6 +816,15 @@ func (d *Debugger) AmendBreakpoint(amend *api.Breakpoint) error {
 	}
 
 	return nil
+}
+
+// AmendBreakpoint will update the breakpoint with the matching ID.
+// It also enables or disables the breakpoint.
+func (d *Debugger) AmendBreakpoint(amend *api.Breakpoint) error {
+	d.targetMutex.Lock()
+	defer d.targetMutex.Unlock()
+
+	return d.amendBreakpoint(amend)
 }
 
 // CancelNext will clear internal breakpoints, thus cancelling the 'next',
@@ -955,6 +973,30 @@ func (d *Debugger) clearBreakpoint(requestedBp *api.Breakpoint) (*api.Breakpoint
 
 	d.log.Infof("cleared breakpoint: %#v", clearedBp)
 	return clearedBp, nil
+}
+
+// isBpHitCondNotSatisfiable returns true if the breakpoint has a hit
+// condition that is no more satisfiable.
+// The hit condition is considered no more satisfiable if it can no longer be
+// hit again, for example with {Op: "==", Val: 1} and TotalHitCount == 1.
+func isBpHitCondNotSatisfiable(bp *api.Breakpoint) bool {
+	if bp.HitCond == "" {
+		return false
+	}
+
+	tok, val, _ := parseHitCondition(bp.HitCond)
+	switch tok {
+	case token.EQL, token.LEQ:
+		if int(bp.TotalHitCount) >= val {
+			return true
+		}
+	case token.LSS:
+		if int(bp.TotalHitCount) >= val-1 {
+			return true
+		}
+	}
+
+	return false
 }
 
 // Breakpoints returns the list of current breakpoints.
@@ -1283,6 +1325,10 @@ func (d *Debugger) Command(command *api.DebuggerCommand, resumeNotify chan struc
 				}
 			}
 		}
+	}
+	if bp := state.CurrentThread.Breakpoint; bp != nil && isBpHitCondNotSatisfiable(bp) {
+		bp.Disabled = true
+		d.amendBreakpoint(bp)
 	}
 	return state, err
 }
