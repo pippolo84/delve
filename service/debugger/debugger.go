@@ -775,10 +775,10 @@ func (d *Debugger) CreateEBPFTracepoint(fnName string) error {
 // We can consume this function to avoid locking a goroutine.
 func (d *Debugger) amendBreakpoint(amend *api.Breakpoint) error {
 	originals := d.findBreakpoint(amend.ID)
+
 	if len(originals) > 0 && originals[0].WatchExpr != "" && amend.Disabled {
 		return errors.New("can not disable watchpoints")
 	}
-
 	_, disabled := d.disabledBreakpoints[amend.ID]
 	if originals == nil && !disabled {
 		return fmt.Errorf("no breakpoint with ID %d", amend.ID)
@@ -975,7 +975,7 @@ func (d *Debugger) clearBreakpoint(requestedBp *api.Breakpoint) (*api.Breakpoint
 	return clearedBp, nil
 }
 
-// isBpHitCondNotSatisfiable returns true if the breakpoint has a hit
+// isBpHitCondNotSatisfiable returns true if the breakpoint bp has a hit
 // condition that is no more satisfiable.
 // The hit condition is considered no more satisfiable if it can no longer be
 // hit again, for example with {Op: "==", Val: 1} and TotalHitCount == 1.
@@ -984,7 +984,10 @@ func isBpHitCondNotSatisfiable(bp *api.Breakpoint) bool {
 		return false
 	}
 
-	tok, val, _ := parseHitCondition(bp.HitCond)
+	tok, val, err := parseHitCondition(bp.HitCond)
+	if err != nil {
+		return false
+	}
 	switch tok {
 	case token.EQL, token.LEQ:
 		if int(bp.TotalHitCount) >= val {

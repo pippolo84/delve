@@ -1401,7 +1401,6 @@ func (s *Session) setBreakpoints(prefix string, totalBps int, metadataFunc func(
 			got.Disabled = false
 			got.Cond = want.condition
 			got.HitCond = want.hitCondition
-
 			err = setLogMessage(got, want.logMessage)
 			if err == nil {
 				err = s.debugger.AmendBreakpoint(got)
